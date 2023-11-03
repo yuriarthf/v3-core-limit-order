@@ -17,9 +17,9 @@ One problem is that users need to be aware of when the swap takes place, or the 
 
 [IUniswapV3PoolState.sol](./contracts/interfaces/pool/IUniswapV3PoolState.sol): [**99-123**](./contracts/interfaces/pool/IUniswapV3PoolState.sol?plain=1#L99-L123)
 
-[IUniswapV3PoolLimitOrder.sol](./contracts/interfaces/pool/IUniswapV3PoolLimitOrder.sol): all
+[IUniswapV3PoolLimitOrder.sol](./contracts/interfaces/pool/IUniswapV3PoolLimitOrder.sol): [**all**](./contracts/interfaces/pool/IUniswapV3PoolLimitOrder.sol?plain=1#L1-L19)
 
-[UniswapV3Pool.limit.spec.ts](./test/UniswapV3Pool.limit.spec.ts): all
+[UniswapV3Pool.limit.spec.ts](./test/UniswapV3Pool.limit.spec.ts): [**all**](./test/UniswapV3Pool.limit.spec.ts?plain=1#L1-L258)
 
 
 ### Added Functions:
