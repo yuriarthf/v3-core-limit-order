@@ -47,7 +47,7 @@ struct UserEpochInfo {
   uint256[] epochs;
 }
 /// (tickLower, user) => UserEpochInfo
-mapping(bytes32 => UserEpochInfo) public userEpochInfo;
+mapping(bytes32 => UserEpochInfo) private userEpochInfo;
 ```
 
 3. `limitOrderStatuses`: Variables containing the status/metadata for each limit order instance. Such as the way it's going to be liquidated (`zeroForOne`), if any limit order was already placed for this tick and epoch (`initialized`), the total liquidity provided (`totalLiquidity`) and how much of the order was filled (`totalFilled`).
