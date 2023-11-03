@@ -1,9 +1,9 @@
 # Uniswap V3 with Limit Orders
 
-This repo was forked from UniswapV3 in order to add an additional feature to the core pool, limit orders. Currently, users can simulate limit orders by providing liquidity to a tick interval that is above or below the current tick.  
-Since, the ticks are not the active ones, they provide just one token as liquidity, and when the price reaches this tick, the tokens are swapped to the opposite one, i.e., `token0` is swapped by `token1` when the limit order tick is greater than the current tick, and `token1` is swapped by `token0` when it's less than the current tick.  
-One problem is, users need to be aware of when the swap takes place, or the price trend can revert and all swapped tokens will be reverted to the previous one.  
-To tackle this issue, the `UniswapV3 Core` contracts were forked and two new functions were added to it, `createLimitOrder`, which allows the user to create limit orders and `collectLimitOrder`, which allows the users to collect the swapped tokens or cancel their orders.
+This repository was forked from UniswapV3 in order to add an additional feature to the core pool: limit orders. Currently, users can simulate limit orders by providing liquidity to a tick interval that is above or below the current tick. Since the ticks are not the active ones, they provide just one token as liquidity, and when the price reaches this tick, the tokens are swapped to the opposite one. For instance, `token0` is swapped for `token1` when the limit order tick is greater than the current tick, and `token1` is swapped for `token0` when it's less than the current tick.
+
+One problem is that users need to be aware of when the swap takes place, or the price trend can reverse, and all swapped tokens will revert to the previous one. To address this issue, the UniswapV3 Core contracts were forked, and two new functions were added to it: `createLimitOrder`, which allows users to create limit orders, and `collectLimitOrder`, which allows users to collect the swapped tokens or cancel their orders.
+
 
 ## Changes
 
@@ -74,11 +74,21 @@ Test can be found [here](./test/UniswapV3Pool.limit.spec.ts). (UniswapV3Pool.lim
 `TODO: Create more test cases to get 100% coverage`
 
 ## Rationale
-When an user creates a limit order, internally, it creates a liquidity position with **DEAD** address as the owner. Such design was chosen to eliminate the necessity of looping over all limit orders when someone is doing a swap which crosses the upper bound of the limit order interval.  
-When a swapped is performed, which crosses the limit order upper bound (`tickUpper`), all the limit order instances that were crossed are liquidated (liquidity from `DEAD` address removed) and the swapped tokens and fees are accounted to `totalFilled` variable.  
-When the limit orders users claim their swapped tokens, they claim an amount proportional to the amount of liquidity they provided for each of the limit orders.
+When a user creates a limit order, internally, it creates a liquidity position with the `DEAD` address as the owner. This design choice was made to eliminate the necessity of looping over all limit orders when someone performs a swap that crosses the upper bound of the limit order interval.
+
+When a swap is performed, crossing the upper bound (`tickUpper`) of the limit order, all the limit order instances that were crossed are liquidated (liquidity from the `DEAD` address is removed), and the swapped tokens and fees are accounted for in the `totalFilled` variable.
+
+When limit order users claim their swapped tokens, they receive an amount proportional to the liquidity they provided for each of the limit orders.
 
 ## Partial Fills
+<<<<<<< Updated upstream
 Partial fills are currently not implemented, since the UniswapV3 architecture does not immediately support it.  
 One of the reasons is that, when a partial liquidity position is liquidated inside the liquidity interval it were assigned to, a proportion of both `token0` and `token1` will be withdrawn, not only the token being liquidated. Even if another liquidity position is created after the operation, the same amount of both tokens will need to be provided back, influenced by the current price (constant product formula).  
 One way this problem might be tackled, although it would be probably be better to rethink the architecture itself, is to create orders that might not be included in the positions liquidity pool and liquidate it when the price crosses the assigned `lowerTick`. One problem with this approach, is the need to determine the logic of which liquidity is going to be used first, or which proportion of both it will be used, note that, if a liquidity position is not created for the limit order tick, the limit order won't be executed until someone do so. 
+=======
+Partial fills are currently not implemented since the UniswapV3 architecture does not immediately support it.  
+
+The reason is that when a partial liquidity position is liquidated inside the liquidity interval to which it was assigned, a proportion of both `token0` and `token1` will be withdrawn, not just the token being liquidated. Even if another liquidity position is created after the operation, the same amount of both tokens will need to be provided back, influenced by the current price (constant product formula).
+
+One way to tackle this problem, although it would probably be better to rethink the architecture itself, is to create orders that might not be included in the position's liquidity pool and liquidate them when the price crosses the assigned `lowerTick`. One problem with this approach, which is solvable, is the need to determine the logic of which liquidity is going to be used first or which proportion of both will be used. Note that if a liquidity position is not created for the limit order tick, the limit order won't be executed until someone does so.
+>>>>>>> Stashed changes
