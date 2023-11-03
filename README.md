@@ -81,14 +81,8 @@ When a swap is performed, crossing the upper bound (`tickUpper`) of the limit or
 When limit order users claim their swapped tokens, they receive an amount proportional to the liquidity they provided for each of the limit orders.
 
 ## Partial Fills
-<<<<<<< Updated upstream
-Partial fills are currently not implemented, since the UniswapV3 architecture does not immediately support it.  
-One of the reasons is that, when a partial liquidity position is liquidated inside the liquidity interval it were assigned to, a proportion of both `token0` and `token1` will be withdrawn, not only the token being liquidated. Even if another liquidity position is created after the operation, the same amount of both tokens will need to be provided back, influenced by the current price (constant product formula).  
-One way this problem might be tackled, although it would be probably be better to rethink the architecture itself, is to create orders that might not be included in the positions liquidity pool and liquidate it when the price crosses the assigned `lowerTick`. One problem with this approach, is the need to determine the logic of which liquidity is going to be used first, or which proportion of both it will be used, note that, if a liquidity position is not created for the limit order tick, the limit order won't be executed until someone do so. 
-=======
-Partial fills are currently not implemented since the UniswapV3 architecture does not immediately support it.  
+Partial fills are currently not implemented since the UniswapV3 architecture does not immediately support it.
 
-The reason is that when a partial liquidity position is liquidated inside the liquidity interval to which it was assigned, a proportion of both `token0` and `token1` will be withdrawn, not just the token being liquidated. Even if another liquidity position is created after the operation, the same amount of both tokens will need to be provided back, influenced by the current price (constant product formula).
+One of the reasons is that when a partial liquidity position is liquidated inside the liquidity interval to which it was assigned, a proportion of both `token0` and `token1` will be withdrawn, not just the token being liquidated to. Even if another liquidity position is created after the operation, the same amount of both tokens will need to be provided back, influenced by the current price (constant product formula).
 
 One way to tackle this problem, although it would probably be better to rethink the architecture itself, is to create orders that might not be included in the position's liquidity pool and liquidate them when the price crosses the assigned `lowerTick`. One problem with this approach, which is solvable, is the need to determine the logic of which liquidity is going to be used first or which proportion of both will be used. Note that if a liquidity position is not created for the limit order tick, the limit order won't be executed until someone does so.
->>>>>>> Stashed changes
