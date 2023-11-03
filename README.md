@@ -9,11 +9,11 @@ One problem is that users need to be aware of when the swap takes place, or the 
 
 ### Added Lines
 [UniswapV3Pool.sol](./contracts/UniswapV3Pool.sol):
-1. `101-120`: Additional Variables;
-2. `512-578`: `createLimitOrder` function;
-3. `580-628`: `_removeUserLimitWithFees` helper function;
-4. `630-711`: `collectLimitOrder` function;
-5. `978-1012`: Limit order liquidation loop.
+1. [**101-120**](./contracts/UniswapV3Pool.sol?plain=1#L101-L120): Additional Variables;
+2. [**512-578**](./contracts/UniswapV3Pool.sol?plain=1#L512-L578): `createLimitOrder` function;
+3. [**580-628**](./contracts/UniswapV3Pool.sol?plain=1#L580-L628): `_removeUserLimitWithFees` helper function;
+4. [**630-711**](./contracts/UniswapV3Pool.sol?plain=1#L630-L711): `collectLimitOrder` function;
+5. [**978-1012**](./contracts/UniswapV3Pool.sol?plain=1#L978-L1012): Limit order liquidation loop.
 
 [IUniswapV3PoolState.sol](./contracts/interfaces/pool/IUniswapV3PoolState.sol): `99-123`
 
