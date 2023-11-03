@@ -9,13 +9,13 @@ One problem is that users need to be aware of when the swap takes place, or the 
 
 ### Added Lines
 [UniswapV3Pool.sol](./contracts/UniswapV3Pool.sol):
-1. [**101-120**](./contracts/UniswapV3Pool.sol?plain=1#L101-L120): Additional Variables;
-2. [**512-578**](./contracts/UniswapV3Pool.sol?plain=1#L512-L578): `createLimitOrder` function;
-3. [**580-628**](./contracts/UniswapV3Pool.sol?plain=1#L580-L628): `_removeUserLimitWithFees` helper function;
-4. [**630-711**](./contracts/UniswapV3Pool.sol?plain=1#L630-L711): `collectLimitOrder` function;
-5. [**978-1012**](./contracts/UniswapV3Pool.sol?plain=1#L978-L1012): Limit order liquidation loop.
+1. Additional Variables: [**101-120**](./contracts/UniswapV3Pool.sol?plain=1#L101-L120)
+2. `createLimitOrder` function: [**512-578**](./contracts/UniswapV3Pool.sol?plain=1#L512-L578)
+3. `_removeUserLimitWithFees` helper function: [**580-628**](./contracts/UniswapV3Pool.sol?plain=1#L580-L628) 
+4. `collectLimitOrder` function: [**630-711**](./contracts/UniswapV3Pool.sol?plain=1#L630-L711)
+5. Limit order liquidation loop: [**978-1012**](./contracts/UniswapV3Pool.sol?plain=1#L978-L1012)
 
-[IUniswapV3PoolState.sol](./contracts/interfaces/pool/IUniswapV3PoolState.sol): `99-123`
+[IUniswapV3PoolState.sol](./contracts/interfaces/pool/IUniswapV3PoolState.sol): [**99-123**](./contracts/interfaces/pool/IUniswapV3PoolState.sol?plain=1#L99-L123)
 
 [IUniswapV3PoolLimitOrder.sol](./contracts/interfaces/pool/IUniswapV3PoolLimitOrder.sol): all
 
