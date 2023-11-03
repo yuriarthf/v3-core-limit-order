@@ -98,27 +98,26 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
     mapping(int16 => uint256) public override tickBitmap;
     /// @inheritdoc IUniswapV3PoolState
     mapping(bytes32 => Position.Info) public override positions;
-    /// tickLower => epoch
-    mapping(int24 => uint256) public currentLimitEpoch;
+    /// @inheritdoc IUniswapV3PoolState
+    mapping(int24 => uint256) public override currentLimitEpoch;
     struct UserEpochInfo {
         uint256 currIndex;
-        uint256 epochLength;
-        uint256 lastAddedEpoch;
+        uint256[] epochs;
     }
-    /// (tickLower, user) => User Epoch Info (Metadata for the users limit epochs)
-    mapping(bytes32 => UserEpochInfo) public userEpochInfos;
-    /// (tickLower, user) => User Epoch Array (Which limit order epochs the user participated)
-    mapping(bytes32 => uint256[]) public userEpochs;
+    /// @dev Used to retrieve the index of the epochs array which has
+    ///     unclaimed limit order epochs
+    /// @dev key is the hash of tickLower and user address
+    mapping(bytes32 => UserEpochInfo) private userEpochInfo;
     struct LimitOrderStatus {
         bool initialized;
         bool zeroForOne;
         uint128 totalFilled;
         uint128 totalLiquidity;
     }
-    /// (tickLower, epoch) => Status of limit orders (Metadata for limit orders)
-    mapping(bytes32 => LimitOrderStatus) public limitOrderStatuses;
-    /// (tickLower, epoch) => User limit liquidity (How much liquidity the user provided for limit orders)
-    mapping(bytes32 => uint128) public usersLimitLiquidity;
+    /// @inheritdoc IUniswapV3PoolState
+    mapping(bytes32 => LimitOrderStatus) public override limitOrderStatuses;
+    /// @inheritdoc IUniswapV3PoolState
+    mapping(bytes32 => uint128) public override usersLimitLiquidity;
     /// @inheritdoc IUniswapV3PoolState
     Oracle.Observation[65535] public override observations;
 
@@ -510,7 +509,8 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         emit Mint(msg.sender, recipient, tickLower, tickUpper, amount, amount0, amount1);
     }
 
-    function createLimitOrder(address recipient, int24 tickLower, uint128 amount) external {
+    /// @inheritdoc IUniswapV3PoolLimitOrder
+    function createLimitOrder(address recipient, int24 tickLower, uint128 amount) external override {
         int24 _tickSpacing = tickSpacing; // Save gas from SLOAD
         int24 tickUpper = tickLower + _tickSpacing;
 
@@ -554,17 +554,16 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
             );
         }
         usersLimitLiquidity[
-            keccak256(abi.encodePacked(tickLower, limitEpoch))
+            keccak256(abi.encodePacked(tickLower, limitEpoch, recipient))
         ] += amount;
         limitOrderStatus.totalLiquidity += amount;
 
 
         bytes32 key = keccak256(abi.encodePacked(tickLower, recipient));
-        UserEpochInfo memory userEpochInfo = userEpochInfos[key];
-        if (userEpochInfo.lastAddedEpoch < limitEpoch) {
-            userEpochInfos[key].lastAddedEpoch = limitEpoch;
-            ++userEpochInfos[key].epochLength;
-            userEpochs[key].push(limitEpoch);
+        uint256[] storage _userEpochs = userEpochInfo[key].epochs;
+        uint256 userEpochsLength = _userEpochs.length;
+        if (userEpochsLength == 0 || _userEpochs[userEpochsLength-1] < limitEpoch) {
+            _userEpochs.push(limitEpoch);
         }
 
         emit Mint(
@@ -578,29 +577,39 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         );
     }
 
-    function _removeUserLiquidityWithFees(
-        uint128 userLiquidity,
-        uint128 totalLiquidity,
-        int24 tickLower,
-        int24 tickUpper
+    struct _removeUserLimitParams {
+        address user;
+        uint128 userLiquidity;
+        uint128 totalLiquidity;
+        int24 tickLower;
+        int24 tickUpper;
+    }
+
+    /// @dev Used to remove user's Limit order liquidity plus fees
+    function _removeUserLimitWithFees(
+        _removeUserLimitParams memory params
     ) internal returns (int256 amount0Int, int256 amount1Int) {
         (, amount0Int, amount1Int) =
             _modifyPosition(
                 ModifyPositionParams({
                     owner: DEAD,
-                    tickLower: tickLower,
-                    tickUpper: tickUpper,
-                    liquidityDelta: -int256(userLiquidity).toInt128()
+                    tickLower: params.tickLower,
+                    tickUpper: params.tickUpper,
+                    liquidityDelta: -int256(params.userLiquidity).toInt128()
                 })
             );
 
-        Position.Info storage position = positions.get(msg.sender, tickLower, tickUpper);
+        Position.Info storage position = positions.get(
+            params.user,
+            params.tickLower,
+            params.tickUpper
+        );
         uint128 tokensOwed0 = position.tokensOwed0;
         if (tokensOwed0 > 0) {
             tokensOwed0 = uint128(FullMath.mulDiv(
                 liquidity,
                 tokensOwed0,
-                totalLiquidity
+                params.totalLiquidity
             ));
             position.tokensOwed0 -= tokensOwed0;
             amount0Int -= tokensOwed0;
@@ -611,30 +620,46 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
             tokensOwed1 = uint128(FullMath.mulDiv(
                 liquidity,
                 tokensOwed1,
-                totalLiquidity
+                params.totalLiquidity
             ));
             position.tokensOwed1 -= tokensOwed1;
             amount1Int -= tokensOwed1;
         }
     }
 
-    function collectLimitOrder(address recipient, int24 tickLower) external {
+    struct CollectLimitOrderState {
+        uint256 lastEpoch;
+        uint256 epochLength;
+        uint256 epochIndex;
+        bytes32 epochKey;
+        bytes32 userEpochKey;
+        uint256 epoch;
+    }
+
+    /// @inheritdoc IUniswapV3PoolLimitOrder
+    function collectLimitOrder(address recipient, int24 tickLower) external override {
         uint256 totalAmount0; uint256 totalAmount1;
-        int24 tickUpper = tickLower + tickSpacing;
         {
-            bytes32 key = keccak256(abi.encodePacked(tickLower, msg.sender));
-            UserEpochInfo memory epochInfo = userEpochInfos[key];
-            uint256 currentEpoch = currentLimitEpoch[tickLower];
-            uint256 epochIndex = epochInfo.currIndex;
-            for (; epochIndex < epochInfo.epochLength;) {
-                uint256 epoch = userEpochs[key][epochIndex];
-                LimitOrderStatus memory status = limitOrderStatuses[
-                    keccak256(abi.encodePacked(tickLower, epoch))
-                ];
-                uint128 userLiquidity = usersLimitLiquidity[
-                    keccak256(abi.encodePacked(tickLower, epoch))
-                ];
-                if (epoch < currentEpoch) {
+            int24 tickUpper = tickLower + tickSpacing;
+            UserEpochInfo storage _userEpochInfo = userEpochInfo[
+                keccak256(abi.encodePacked(tickLower, msg.sender))
+            ];
+            CollectLimitOrderState memory state = CollectLimitOrderState({
+                epochLength: _userEpochInfo.epochs.length,
+                lastEpoch: currentLimitEpoch[tickLower],
+                epochIndex: _userEpochInfo.currIndex,
+                epochKey: bytes32(0),
+                userEpochKey: bytes32(0),
+                epoch: 0
+            });
+            uint256[] memory _userEpochs = _userEpochInfo.epochs;
+            for (; state.epochIndex < state.epochLength;) {
+                state.epoch = _userEpochs[state.epochIndex];
+                state.epochKey = keccak256(abi.encodePacked(tickLower, state.epoch));
+                state.userEpochKey = keccak256(abi.encodePacked(tickLower, state.epoch, msg.sender));
+                LimitOrderStatus memory status = limitOrderStatuses[state.epochKey];
+                uint128 userLiquidity = usersLimitLiquidity[state.userEpochKey];
+                if (state.epoch < state.lastEpoch) {
                     uint256 amount = FullMath.mulDiv(
                         status.totalFilled,
                         userLiquidity,
@@ -646,21 +671,22 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
                         totalAmount0 += amount;
                     }
                 } else if (userLiquidity > 0) {
-                    (int256 amount0Int, int256 amount1Int) = _removeUserLiquidityWithFees(
-                        userLiquidity,
-                        status.totalLiquidity,
-                        tickLower,
-                        tickUpper
+                    (int256 amount0Int, int256 amount1Int) = _removeUserLimitWithFees(
+                        _removeUserLimitParams({
+                            user: msg.sender,
+                            userLiquidity: userLiquidity,
+                            totalLiquidity: status.totalLiquidity,
+                            tickLower: tickLower,
+                            tickUpper: tickUpper
+                        })
                     );
 
                     totalAmount0 += uint256(uint128(-amount0Int));
                     totalAmount1 += uint256(uint128(-amount1Int));
 
-                    delete usersLimitLiquidity[keccak256(abi.encodePacked(tickLower, epoch))];
+                    delete usersLimitLiquidity[state.userEpochKey];
 
-                    limitOrderStatuses[
-                        keccak256(abi.encodePacked(tickLower, epoch))
-                    ].totalLiquidity -= userLiquidity;
+                    limitOrderStatuses[state.epochKey].totalLiquidity -= userLiquidity;
 
                     emit Burn(
                         msg.sender,
@@ -672,10 +698,10 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
                     );
                 }
 
-                if (++epochIndex == epochInfo.epochLength) {
-                    userEpochInfos[key].currIndex = epoch < currentEpoch
-                        ? epochIndex
-                        : epochIndex - 1;
+                if (++state.epochIndex == state.epochLength) {
+                    _userEpochInfo.currIndex = state.epoch < state.lastEpoch
+                        ? state.epochIndex
+                        : state.epochIndex - 1;
                 }
             }
         }
