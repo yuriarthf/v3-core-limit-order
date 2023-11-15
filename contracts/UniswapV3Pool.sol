@@ -27,6 +27,9 @@ import './interfaces/callback/IUniswapV3MintCallback.sol';
 import './interfaces/callback/IUniswapV3SwapCallback.sol';
 import './interfaces/callback/IUniswapV3FlashCallback.sol';
 
+import 'hardhat/console.sol';
+
+
 contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
     using LowGasSafeMath for uint256;
     using LowGasSafeMath for int256;
@@ -797,8 +800,6 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         uint128 protocolFee;
         // the current liquidity in range
         uint128 liquidity;
-        // counts how many times the ticks were shifted during a swap
-        int24 ticksShifted;
     }
 
     struct StepComputations {
@@ -816,6 +817,39 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         uint256 amountOut;
         // how much fee is being paid in
         uint256 feeAmount;
+    }
+
+    function liquidateLimitOrder(int24 tickLower) internal {  
+        uint256 limitEpoch = currentLimitEpoch[tickLower];
+        if (limitEpoch == 0) return;
+        LimitOrderStatus storage limitOrderStatus = limitOrderStatuses[
+            keccak256(abi.encodePacked(tickLower, limitEpoch))
+        ];
+        if (limitOrderStatus.initialized) {
+            if (limitOrderStatus.totalLiquidity > 0) {
+                int24 tickUpper = tickLower + tickSpacing;
+                Position.Info storage position = positions.get(DEAD, tickLower, tickUpper);
+                (, int256 amount0Int, int256 amount1Int) =
+                    _modifyPosition(
+                        ModifyPositionParams({
+                            owner: DEAD,
+                            tickLower: tickLower,
+                            tickUpper: tickUpper,
+                            liquidityDelta: -int128(position.liquidity)
+                        })
+                    );
+                // TODO: Implement fee distribution
+                /*
+                amount0Int += position.tokensOwed0;
+                amount1Int += position.tokensOwed1;
+
+                position.tokensOwed0 = 0;
+                position.tokensOwed1 = 0;
+                */
+                limitOrderStatus.totalFilled = uint128(-(amount0Int + amount1Int));
+            }
+            ++currentLimitEpoch[tickLower];
+        }
     }
 
     /// @inheritdoc IUniswapV3PoolActions
@@ -860,8 +894,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
                 tick: slot0Start.tick,
                 feeGrowthGlobalX128: zeroForOne ? feeGrowthGlobal0X128 : feeGrowthGlobal1X128,
                 protocolFee: 0,
-                liquidity: cache.liquidityStart,
-                ticksShifted: 0
+                liquidity: cache.liquidityStart
             });
 
         // continue swapping as long as we haven't used the entire input/output and haven't reached the price limit
@@ -918,8 +951,6 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
 
             // shift tick if we reached the next price
             if (state.sqrtPriceX96 == step.sqrtPriceNextX96) {
-                ++state.ticksShifted; // used to liquidate limit order later on
-                // if the tick is initialized, run the tick transition
                 if (step.initialized) {
                     // check for the placeholder value, which we replace with the actual value the first time the swap
                     // crosses an initialized tick
@@ -950,7 +981,13 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
                     state.liquidity = LiquidityMath.addDelta(state.liquidity, liquidityNet);
                 }
 
-                state.tick = zeroForOne ? step.tickNext - 1 : step.tickNext;
+                if (zeroForOne) {
+                    liquidateLimitOrder(state.tick);
+                    state.tick = step.tickNext - 1;
+                } else {
+                    liquidateLimitOrder(state.tick - tickSpacing);
+                    state.tick = step.tickNext;
+                }
             } else if (state.sqrtPriceX96 != step.sqrtPriceStartX96) {
                 // recompute unless we're on a lower tick boundary (i.e. already transitioned ticks), and haven't moved
                 state.tick = TickMath.getTickAtSqrtRatio(state.sqrtPriceX96);
@@ -974,42 +1011,6 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
                 observationIndex,
                 observationCardinality
             );
-   
-            // Liquidate all limit orders
-            for (
-                int24 tickLower = slot0Start.tick;
-                tickLower < slot0Start.tick + state.ticksShifted * tickSpacing;
-                tickLower += tickSpacing
-            ) {
-                uint256 limitEpoch = currentLimitEpoch[tickLower];
-                LimitOrderStatus storage limitOrderStatus = limitOrderStatuses[
-                    keccak256(abi.encodePacked(tickLower, limitEpoch))
-                ];
-                if (limitOrderStatus.initialized) {
-                    if (limitOrderStatus.totalLiquidity > 0) {
-                        int24 tickUpper = tickLower + tickSpacing;
-                        Position.Info storage position = positions.get(DEAD, tickLower, tickUpper);
-                        (, int256 amount0Int, int256 amount1Int) =
-                            _modifyPosition(
-                                ModifyPositionParams({
-                                    owner: DEAD,
-                                    tickLower: tickLower,
-                                    tickUpper: tickUpper,
-                                    liquidityDelta: -int128(position.liquidity)
-                                })
-                            );
-
-                        amount0Int += position.tokensOwed0;
-                        amount1Int += position.tokensOwed1;
-
-                        position.tokensOwed0 = 0;
-                        position.tokensOwed1 = 0;
-                        
-                        limitOrderStatus.totalFilled = uint128(-(amount0Int + amount1Int));
-                    }
-                    ++currentLimitEpoch[tickLower];
-                }
-            }
         } else {
             // otherwise just update the price
             slot0.sqrtPriceX96 = state.sqrtPriceX96;
