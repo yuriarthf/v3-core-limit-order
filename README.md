@@ -13,7 +13,7 @@ One problem is that users need to be aware of when the swap takes place, or the 
 2. `createLimitOrder` function: [**512-578**](./contracts/UniswapV3Pool.sol?plain=1#L512-L578)
 3. `_removeUserLimitWithFees` helper function: [**580-628**](./contracts/UniswapV3Pool.sol?plain=1#L580-L628) 
 4. `collectLimitOrder` function: [**630-711**](./contracts/UniswapV3Pool.sol?plain=1#L630-L711)
-5. Limit order liquidation loop: [**978-1012**](./contracts/UniswapV3Pool.sol?plain=1#L978-L1012)
+5. Limit order liquidation function: [**822-854**](./contracts/UniswapV3Pool.sol?plain=1#L822-L854)
 
 [IUniswapV3PoolState.sol](./contracts/interfaces/pool/IUniswapV3PoolState.sol): [**99-123**](./contracts/interfaces/pool/IUniswapV3PoolState.sol?plain=1#L99-L123)
 

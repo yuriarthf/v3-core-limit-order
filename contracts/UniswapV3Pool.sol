@@ -819,6 +819,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         uint256 feeAmount;
     }
 
+    /// @dev Liquidate limit order at 'tickLower'
     function liquidateLimitOrder(int24 tickLower) internal {  
         uint256 limitEpoch = currentLimitEpoch[tickLower];
         if (limitEpoch == 0) return;
